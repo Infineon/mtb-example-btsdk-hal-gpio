@@ -36,7 +36,7 @@
  *
  * WICED sample application for GPIO
  *
- * This application demonstrates how to use WICED GPIO APIs to,
+ * This application demonstrates how to use AIROC GPIO APIs to,
  *
  *  a) configure GPIO to be an input pin (and receive interrupt upon change of pin state)
  *  b) configure GPIO to be an output pin (by toggling LED's available on reference board)
@@ -49,7 +49,7 @@
  * LED_BLINK_FREQ_B_IN_SECONDS
  *
  * To demonstrate the snip, work through the following steps.
- * 1. Plug the WICED evaluation board to your computer.
+ * 1. Plug the AIROC evaluation board to your computer.
  * 2. Build and download the application.
  * 3. Use Terminal emulation tools like Teraterm or Putty to view the trace messages(See Kit User Guide).
  *
@@ -63,8 +63,14 @@
 
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
-#include "wiced_bt_stack.h"
-#include "GeneratedSource/cycfg_pins.h"
+#if !defined(CYW20706A2) && (!defined(CYW43012C0) || (defined(USE_DESIGN_MODUS) && USE_DESIGN_MODUS))
+#include "cycfg_pins.h"
+#endif
+#ifdef BTSTACK_VER
+#include "wiced_memory.h"
+#include "bt_types.h"
+#endif
+
 /******************************************************************************
  *                                Constants
  ******************************************************************************/
@@ -73,6 +79,12 @@
  * the below two values upon button press ) */
 #define LED_BLINK_FREQ_A_IN_SECONDS 2 /* Seconds timer */
 #define LED_BLINK_FREQ_B_IN_SECONDS 1 /* Seconds timer */
+
+#ifdef BTSTACK_VER
+#define BT_STACK_HEAP_SIZE          1024 * 6
+wiced_bt_heap_t *p_default_heap = NULL;
+#endif
+
 
 /******************************************************************************
  *                                Structures
@@ -87,66 +99,39 @@ static wiced_timer_t hal_gpio_app_timer;
 /******************************************************************************
  *                          Function Definitions
  ******************************************************************************/
-static wiced_result_t hal_gpio_app_management_cback(wiced_bt_management_evt_t event, wiced_bt_management_evt_data_t *p_event_data);
 
 static void hal_gpio_app_test_input(void);
 static void hal_gpio_app_test_output(void);
 
-void hal_gpio_app_timer_cb(uint32_t arg);
+static void hal_gpio_app_timer_cb(uint32_t arg);
 
-void hal_gpio_app_interrrupt_handler(void *data, uint8_t port_pin);
+static void hal_gpio_app_interrrupt_handler(void *data, uint8_t port_pin);
 
-/*
- *  Entry point to the application. Set device configuration and start BT
- *  stack initialization.  The actual application initialization will happen
- *  when stack reports that BT device is ready.
- */
+/* Entry point to the application. */
+
 APPLICATION_START()
 {
     uint8_t index;
 
+#if defined(CYW43012C0)
+    wiced_set_debug_uart(WICED_ROUTE_DEBUG_TO_DBG_UART);
+#else // CYW43012C0
     wiced_set_debug_uart(WICED_ROUTE_DEBUG_TO_PUART);
+#endif
+
+    // Initialize timer to control the pin toggle frequency
+    wiced_init_timer(&hal_gpio_app_timer, &hal_gpio_app_timer_cb, 0, WICED_SECONDS_PERIODIC_TIMER);
+    wiced_start_timer(&hal_gpio_app_timer, LED_BLINK_FREQ_A_IN_SECONDS);
+
+    // initialize all the output pins selected in output_pin_list
+    hal_gpio_app_test_output();
+
+    // initialize all the input pins selected in input_pin_list
+    hal_gpio_app_test_input();
 
     WICED_BT_TRACE("**** hal_gpio_app **** \n\r");
-
-    // Register call back with stack
-    wiced_bt_stack_init(hal_gpio_app_management_cback, NULL, NULL);
 }
 
-wiced_result_t hal_gpio_app_management_cback(wiced_bt_management_evt_t event, wiced_bt_management_evt_data_t *p_event_data)
-{
-    wiced_result_t result = WICED_SUCCESS;
-
-    WICED_BT_TRACE("hal_gpio_app_management_cback %d\n\r", event);
-
-    switch (event)
-    {
-    // Bluetooth  stack enabled
-    case BTM_ENABLED_EVT:
-
-        // Initialize timer to control the pin toggle frequency
-        if (wiced_init_timer(&hal_gpio_app_timer, &hal_gpio_app_timer_cb, 0, WICED_SECONDS_PERIODIC_TIMER) == WICED_SUCCESS)
-        {
-            if (wiced_start_timer(&hal_gpio_app_timer, LED_BLINK_FREQ_A_IN_SECONDS) != WICED_SUCCESS)
-            {
-                WICED_BT_TRACE("Seconds Timer Error\n");
-            }
-        }
-
-        // initialize all the output pins selected in output_pin_list
-        hal_gpio_app_test_output();
-
-        // initialize all the input pins selected in input_pin_list
-        hal_gpio_app_test_input();
-
-        break;
-
-    default:
-        break;
-    }
-
-    return result;
-}
 
 /*
  * initialize all the input pins selected in input_pin_list to be input, enable interrupts and register
@@ -169,6 +154,9 @@ void hal_gpio_app_test_input(void)
  */
 void hal_gpio_app_test_output(void)
 {
+#ifdef CYW955572BTEVK_01
+    WICED_BT_TRACE("CYW955572BTEVK-01 does not support LEDs.\n");
+#else
     uint8_t index = 0;
 
     // Configure all the selected pins to be output
@@ -176,6 +164,7 @@ void hal_gpio_app_test_output(void)
     {
         wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_LED(index), GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_HIGH);
     }
+#endif
 }
 
 /*
@@ -184,6 +173,14 @@ void hal_gpio_app_test_output(void)
 void hal_gpio_app_timer_cb(uint32_t arg)
 {
     static uint32_t wiced_seconds = 0; /* number of seconds elapsed */
+
+#if defined(CYW955572BTEVK_01) || defined(CYW943012BTEVK_01)
+    wiced_seconds++;
+
+    WICED_BT_TRACE("Timer callback : %d seconds elapsed.\n", wiced_seconds);
+#else
+      WICED_BT_TRACE("hal_gpio_app_timer_cb \n");
+
     uint8_t index = 0;
 
     wiced_seconds++;
@@ -202,6 +199,7 @@ void hal_gpio_app_timer_cb(uint32_t arg)
             wiced_hal_gpio_set_pin_output(WICED_GET_PIN_FOR_LED(index), GPIO_PIN_OUTPUT_HIGH);
         }
     }
+#endif
 }
 
 /*
@@ -210,6 +208,7 @@ void hal_gpio_app_timer_cb(uint32_t arg)
 void hal_gpio_app_interrrupt_handler(void *data, uint8_t pin)
 {
     static uint32_t blink_freq = LED_BLINK_FREQ_A_IN_SECONDS;
+    WICED_BT_TRACE("Button pressed \n\r");
 
     // toggle LED blink rate upon each button press
     if (blink_freq == LED_BLINK_FREQ_A_IN_SECONDS)
@@ -221,10 +220,11 @@ void hal_gpio_app_interrrupt_handler(void *data, uint8_t pin)
         blink_freq = LED_BLINK_FREQ_A_IN_SECONDS;
     }
 
-    if (wiced_stop_timer(&hal_gpio_app_timer) == WICED_SUCCESS)
+    if (wiced_is_timer_in_use(&hal_gpio_app_timer))
     {
-        wiced_start_timer(&hal_gpio_app_timer, blink_freq);
+        wiced_stop_timer(&hal_gpio_app_timer);
     }
+    wiced_start_timer(&hal_gpio_app_timer, blink_freq);
 
     // clear the interrupt status
     wiced_hal_gpio_clear_pin_interrupt_status(pin);

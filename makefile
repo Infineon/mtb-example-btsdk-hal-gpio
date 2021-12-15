@@ -66,12 +66,15 @@ SUPPORTED_TARGETS = \
   CYW920719B2Q40EVB-01 \
   CYW920706WCDEVAL \
   CYBT-343026-EVAL \
+  CYBT-333047-EVAL \
   CYBT-343052-EVAL \
   CYW920735Q60EVB-01 \
   CYW920835M2EVB-01 \
   CYBLE-343072-EVAL-M2B \
   CYBLE-333074-EVAL-M2B \
-  CYW920721M2EVK-02
+  CYW920721M2EVK-02 \
+  CYW955572BTEVK-01 \
+  CYW920721M2EVB-03
 #
 # Advanced Configuration
 #
@@ -111,16 +114,6 @@ CY_APP_DEFINES+=\
 # Components (middleware libraries)
 #
 COMPONENTS +=bsp_design_modus
-ifeq ($(TARGET),CYW920721B2EVK-03)
-# use app specific design.modus
-DISABLE_COMPONENTS+=bsp_design_modus
-COMPONENTS+=CYW920721B2EVK-03_design_modus
-endif
-ifeq ($(TARGET),CYW920721M2EVK-01)
-# use app specific design.modus
-DISABLE_COMPONENTS+=bsp_design_modus
-COMPONENTS+=CYW920721M2EVK-01_design_modus
-endif
 
 ################################################################################
 # Paths

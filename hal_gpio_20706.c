@@ -204,12 +204,7 @@ void gpio_test_led( )
     /* Configure LED PIN as input and initial outvalue as high */
     wiced_hal_gpio_configure_pin( LED_GPIO_1, GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_HIGH );
 
-    if ( wiced_init_timer( &seconds_timer, &seconds_app_timer_cb, 0, WICED_SECONDS_PERIODIC_TIMER )== WICED_SUCCESS )
-    {
-        if ( wiced_start_timer( &seconds_timer, APP_TIMEOUT_IN_SECONDS_A ) !=  WICED_SUCCESS )
-    {
-            WICED_BT_TRACE( "Seconds Timer Error\n\r" );
-        }
-    }
+    wiced_init_timer( &seconds_timer, &seconds_app_timer_cb, 0, WICED_SECONDS_PERIODIC_TIMER );
+    wiced_start_timer( &seconds_timer, APP_TIMEOUT_IN_SECONDS_A );
 }
 #endif
