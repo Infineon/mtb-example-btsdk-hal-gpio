@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021, Cypress Semiconductor Corporation (an Infineon company) or
+ * Copyright 2016-2022, Cypress Semiconductor Corporation (an Infineon company) or
  * an affiliate of Cypress Semiconductor Corporation.  All rights reserved.
  *
  * This software, including source code, documentation and related
@@ -63,7 +63,7 @@
 
 #include "wiced_bt_trace.h"
 #include "wiced_platform.h"
-#if !defined(CYW20706A2) && (!defined(CYW43012C0) || (defined(USE_DESIGN_MODUS) && USE_DESIGN_MODUS))
+#if !defined(CYW20706A2)
 #include "cycfg_pins.h"
 #endif
 #ifdef BTSTACK_VER
@@ -103,7 +103,7 @@ static wiced_timer_t hal_gpio_app_timer;
 static void hal_gpio_app_test_input(void);
 static void hal_gpio_app_test_output(void);
 
-static void hal_gpio_app_timer_cb(uint32_t arg);
+static void hal_gpio_app_timer_cb(TIMER_PARAM_TYPE arg);
 
 static void hal_gpio_app_interrrupt_handler(void *data, uint8_t port_pin);
 
@@ -113,12 +113,12 @@ APPLICATION_START()
 {
     uint8_t index;
 
-#if defined(CYW43012C0)
-    wiced_set_debug_uart(WICED_ROUTE_DEBUG_TO_DBG_UART);
-#else // CYW43012C0
     wiced_set_debug_uart(WICED_ROUTE_DEBUG_TO_PUART);
-#endif
 
+#ifdef BTSTACK_VER
+    /* Create default heap */
+    p_default_heap = wiced_bt_create_heap("default_heap", NULL, BT_STACK_HEAP_SIZE, NULL, WICED_TRUE);
+#endif
     // Initialize timer to control the pin toggle frequency
     wiced_init_timer(&hal_gpio_app_timer, &hal_gpio_app_timer_cb, 0, WICED_SECONDS_PERIODIC_TIMER);
     wiced_start_timer(&hal_gpio_app_timer, LED_BLINK_FREQ_A_IN_SECONDS);
@@ -132,20 +132,31 @@ APPLICATION_START()
     WICED_BT_TRACE("**** hal_gpio_app **** \n\r");
 }
 
-
 /*
  * initialize all the input pins selected in input_pin_list to be input, enable interrupts and register
  * a interrupt handler
  */
+
 void hal_gpio_app_test_input(void)
 {
     uint8_t index = 0;
 
     // Configure all the selected pins to be input
-    for (index = 0; index < WICED_PLATFORM_BUTTON_MAX; index++)
+    for (index = 0; index < button_count; index++)
     {
+        WICED_BT_TRACE("Found button configured for pin %d, index %d\n", WICED_GET_PIN_FOR_BUTTON(index), index);
         wiced_hal_gpio_register_pin_for_interrupt(WICED_GET_PIN_FOR_BUTTON(index), hal_gpio_app_interrrupt_handler, NULL);
         wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_BUTTON(index), WICED_GPIO_BUTTON_SETTINGS(GPIO_EN_INT_RISING_EDGE), GPIO_PIN_OUTPUT_LOW);
+    }
+    // Configure all the gpio input pins to be input
+    for (index = 0; index < gpio_count; index++)
+    {
+        if(!(wiced_hal_gpio_get_pin_config(WICED_GET_PIN_FOR_IO(index)) & GPIO_OUTPUT_ENABLE))
+        {
+            WICED_BT_TRACE("Found GPIO input configured for pin %d, index %d\n", WICED_GET_PIN_FOR_IO(index), index);
+            wiced_hal_gpio_register_pin_for_interrupt(WICED_GET_PIN_FOR_IO(index), hal_gpio_app_interrrupt_handler, NULL);
+            wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_IO(index), WICED_GPIO_BUTTON_SETTINGS(GPIO_EN_INT_RISING_EDGE), GPIO_PIN_OUTPUT_LOW);
+        }
     }
 }
 
@@ -154,32 +165,33 @@ void hal_gpio_app_test_input(void)
  */
 void hal_gpio_app_test_output(void)
 {
-#ifdef CYW955572BTEVK_01
-    WICED_BT_TRACE("CYW955572BTEVK-01 does not support LEDs.\n");
-#else
     uint8_t index = 0;
 
     // Configure all the selected pins to be output
-    for (index = 0; index < WICED_PLATFORM_LED_MAX; index++)
+    for (index = 0; index < led_count; index++)
     {
+        WICED_BT_TRACE("Found LED configured for pin %d, index %d\n", WICED_GET_PIN_FOR_LED(index), index);
         wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_LED(index), GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_HIGH);
     }
-#endif
+    // Configure all the gpio output pins to be output
+    for (index = 0; index < gpio_count; index++)
+    {
+        if(wiced_hal_gpio_get_pin_config(WICED_GET_PIN_FOR_IO(index)) & GPIO_OUTPUT_ENABLE)
+        {
+            WICED_BT_TRACE("Found GPIO output configured for pin %d, index %d\n", WICED_GET_PIN_FOR_IO(index), index);
+            wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_IO(index), GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_HIGH);
+        }
+    }
 }
 
 /*
  * The function invoked on timeout of app. seconds timer.
  */
-void hal_gpio_app_timer_cb(uint32_t arg)
+void hal_gpio_app_timer_cb(TIMER_PARAM_TYPE arg)
 {
     static uint32_t wiced_seconds = 0; /* number of seconds elapsed */
 
-#if defined(CYW955572BTEVK_01) || defined(CYW943012BTEVK_01)
-    wiced_seconds++;
-
-    WICED_BT_TRACE("Timer callback : %d seconds elapsed.\n", wiced_seconds);
-#else
-      WICED_BT_TRACE("hal_gpio_app_timer_cb \n");
+    WICED_BT_TRACE("hal_gpio_app_timer_cb %d\n", wiced_seconds);
 
     uint8_t index = 0;
 
@@ -187,19 +199,32 @@ void hal_gpio_app_timer_cb(uint32_t arg)
 
     if (wiced_seconds & 1)
     {
-        for (index = 0; index < WICED_PLATFORM_LED_MAX; index++)
+        for (index = 0; index < led_count; index++)
         {
             wiced_hal_gpio_set_pin_output(WICED_GET_PIN_FOR_LED(index), GPIO_PIN_OUTPUT_LOW);
+        }
+        for (index = 0; index < gpio_count; index++)
+        {
+            if(wiced_hal_gpio_get_pin_config(WICED_GET_PIN_FOR_IO(index)) & GPIO_OUTPUT_ENABLE)
+            {
+                wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_IO(index), GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_LOW);
+            }
         }
     }
     else
     {
-        for (index = 0; index < WICED_PLATFORM_LED_MAX; index++)
+        for (index = 0; index < led_count; index++)
         {
             wiced_hal_gpio_set_pin_output(WICED_GET_PIN_FOR_LED(index), GPIO_PIN_OUTPUT_HIGH);
         }
+        for (index = 0; index < gpio_count; index++)
+        {
+            if(wiced_hal_gpio_get_pin_config(WICED_GET_PIN_FOR_IO(index)) & GPIO_OUTPUT_ENABLE)
+            {
+                wiced_hal_gpio_configure_pin(WICED_GET_PIN_FOR_IO(index), GPIO_OUTPUT_ENABLE, GPIO_PIN_OUTPUT_HIGH);
+            }
+        }
     }
-#endif
 }
 
 /*
@@ -208,7 +233,7 @@ void hal_gpio_app_timer_cb(uint32_t arg)
 void hal_gpio_app_interrrupt_handler(void *data, uint8_t pin)
 {
     static uint32_t blink_freq = LED_BLINK_FREQ_A_IN_SECONDS;
-    WICED_BT_TRACE("Button pressed \n\r");
+    WICED_BT_TRACE("Button pressed pin %d\n\r", pin);
 
     // toggle LED blink rate upon each button press
     if (blink_freq == LED_BLINK_FREQ_A_IN_SECONDS)
