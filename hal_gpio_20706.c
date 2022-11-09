@@ -84,7 +84,7 @@
 #define APP_TIMEOUT_IN_SECONDS_A                  1       /* Seconds timer */
 #define APP_TIMEOUT_IN_SECONDS_B                  5       /* Seconds timer */
 
-wiced_timer_t seconds_timer;               /* wiced bt app seconds timer */
+wiced_timer_t seconds_timer;                   /* app seconds timer */
 uint32_t wiced_timer_count       = 0;          /* number of seconds elapsed */
 
 static wiced_result_t sample_gpio_app_management_cback( wiced_bt_management_evt_t event,
@@ -97,9 +97,9 @@ static void gpio_test_led( );
  ******************************************************************************/
 
 /*
- *  Entry point to the application. Set device configuration and start BT
+ *  Entry point to the application. Set device configuration and start Bluetooth
  *  stack initialization.  The actual application initialization will happen
- *  when stack reports that BT device is ready.
+ *  when stack reports that Bluetooth device is ready.
  */
 APPLICATION_START( )
 {
